@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title data-i18n="app_title">酸碱滴定pH计算器 - 专业版 v7.0.9</title>
+    <script src="vendor/chart.js"></script>
+    <script src="vendor/chartjs-plugin-annotation.js"></script>
+    <script>
+        // MathJax 配置：启用 $ 行内公式与 mhchem 化学式扩展（\ce{}），
+        // 供 AI 问答回复中的 LaTeX 公式排版使用
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                packages: { '[+]': ['mhchem'] }
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="vendor/mathjax/tex-mml-chtml.js"></script>
+    <script async src="vendor/busuanzi.js"></script>
+    <link rel="stylesheet" href="assets/css/main.css">
+    <style>
+        :root[data-theme="light"] .ai-panel {
+            --ai-bg: #ffffff;
+            --ai-border: rgba(100,116,139,0.22);
+            --ai-text: #172033;
+            --ai-text-secondary: #475569;
+            --ai-input-bg: #f8fafc;
+        }
+        :root[data-theme="dark"] .ai-panel,
+        .ai-panel {
+            --ai-bg: rgba(15,23,42,0.96);
+            --ai-border: rgba(148,163,184,0.18);
+            --ai-text: #e2e8f0;
+            --ai-text-secondary: #94a3b8;
+            --ai-input-bg: rgba(30,41,59,0.85);
+        }
+        .ai-float-btn {
+            position: fixed;
+            right: 22px;
+            bottom: 22px;
+            z-index: 9998;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #7c3aed, #2563eb);
+            color: #fff;
+            font-size: 1.5rem;
+            box-shadow: 0 6px 18px rgba(37,99,235,0.35);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .ai-float-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(37,99,235,0.45); }
+        .ai-panel {
+            position: fixed;
+            right: 22px;
+            bottom: 90px;
+            z-index: 9999;
+            width: 360px;
+            max-width: calc(100vw - 44px);
+            max-height: 70vh;
+            background: var(--ai-bg);
+            border: 1px solid var(--ai-border);
+            border-radius: 16px;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.28);
+            color: var(--ai-text);
+            display: flex;
+            flex-direction: column;
+            transform: scale(0.95) translateY(10px);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.2s, opacity 0.2s;
+            overflow: hidden;
+        }
+        .ai-panel.open { transform: scale(1) translateY(0); opacity: 1; pointer-events: auto; }
+        .ai-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--ai-border);
+            font-weight: 700;
+            cursor: grab;
+            touch-action: none;
+            user-select: none;
+        }
+        .ai-panel-header:active { cursor: grabbing; }
+        .ai-panel-title { pointer-events: none; }
+        .ai-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            pointer-events: auto;
+        }
+        .ai-model-select {
+            padding: 4px 8px;
+            border-radius: 8px;
+            border: 1px solid var(--ai-border);
+            background: var(--ai-input-bg);
+            color: var(--ai-text);
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .ai-panel-close {
+            background: transparent;
+            border: none;
+            color: var(--ai-text-secondary);
+            font-size: 1.3rem;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .ai-float-btn { touch-action: none; user-select: none; cursor: grab; }
+        .ai-float-btn:active { cursor: grabbing; }
+        .ai-panel-body {
+            padding: 14px 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .ai-config-textarea {
+            width: 100%;
+            min-height: 84px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--ai-border);
+            background: var(--ai-input-bg);
+            color: var(--ai-text);
+            font-size: 0.92rem;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        .ai-config-btn {
+            margin-top: 10px;
+            width: 100%;
+            padding: 10px;
+            border-radius: 10px;
+            border: none;
+            background: linear-gradient(135deg, #7c3aed, #2563eb);
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .ai-config-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .ai-status { margin-top: 8px; font-size: 0.82rem; min-height: 1.2em; }
+        .ai-status-info { color: #57a7bd; }
+        .ai-status-error { color: #ef4444; }
+        .ai-history-title {
+            margin: 16px 0 8px;
+            font-size: 0.85rem;
+            color: var(--ai-text-secondary);
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .ai-history-clear {
+            background: transparent;
+            border: none;
+            color: var(--ai-text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        .ai-history-list { display: flex; flex-direction: column; gap: 8px; }
+        .ai-history-item {
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: var(--ai-input-bg);
+            border: 1px solid var(--ai-border);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .ai-history-item:hover { background: rgba(87,167,189,0.12); }
+        .ai-history-text {
+            font-size: 0.86rem;
+            color: var(--ai-text);
+            line-height: 1.35;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .ai-history-meta {
+            margin-top: 6px;
+            font-size: 0.72rem;
+            color: var(--ai-text-secondary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .ai-history-delete {
+            background: transparent;
+            border: none;
+            color: #ef4444;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        .ai-history-empty {
+            font-size: 0.8rem;
+            color: var(--ai-text-secondary);
+            text-align: center;
+            padding: 10px 0;
+        }
+        .ai-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid var(--ai-border);
+            padding-bottom: 6px;
+        }
+        .ai-tab {
+            flex: 1;
+            padding: 7px 4px;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            color: var(--ai-text-secondary);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+        .ai-tab:hover { background: var(--ai-input-bg); }
+        .ai-tab.active { background: rgba(87,167,189,0.15); color: #57a7bd; }
+        .ai-tab-content { display: none; }
+        .ai-tab-content.active { display: block; }
+        .ai-help-text, .ai-answer {
+            font-size: 0.8rem;
+            line-height: 1.45;
+            color: var(--ai-text-secondary);
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: var(--ai-input-bg);
+            border: 1px solid var(--ai-border);
+        }
+        .ai-answer { color: var(--ai-text); white-space: normal; }
+        .ai-answer h1, .ai-answer h2, .ai-answer h3 {
+            margin: 12px 0 6px;
+            line-height: 1.3;
+        }
+        .ai-answer h1 { font-size: 1.05rem; }
+        .ai-answer h2 { font-size: 1rem; }
+        .ai-answer h3 { font-size: 0.95rem; }
+        .ai-answer h4, .ai-answer h5, .ai-answer h6 {
+            margin: 10px 0 6px;
+            line-height: 1.3;
+        }
+        .ai-answer h4 { font-size: 0.95rem; }
+        .ai-answer h5 { font-size: 0.88rem; }
+        .ai-answer h6 { font-size: 0.84rem; }
+        .ai-answer ul, .ai-answer ol { margin: 6px 0; padding-left: 20px; }
+        .ai-answer li { margin: 3px 0; }
+        .ai-answer p { margin: 6px 0; }
+        .ai-answer strong { color: var(--ai-text); font-weight: 700; }
+        .ai-answer em { font-style: italic; }
+        .ai-answer code {
+            padding: 1px 5px;
+            border-radius: 5px;
+            background: rgba(127,127,127,0.18);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 0.82em;
+        }
+        .ai-answer pre {
+            margin: 8px 0;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: rgba(127,127,127,0.14);
+            overflow-x: auto;
+        }
+        .ai-answer pre code { padding: 0; background: transparent; }
+        .ai-answer a { color: #57a7bd; }
+        .ai-answer blockquote {
+            margin: 6px 0;
+            padding: 4px 12px;
+            border-left: 3px solid var(--ai-border);
+            color: var(--ai-text-secondary);
+        }
+        .ai-answer hr { border: none; border-top: 1px solid var(--ai-border); margin: 8px 0; }
+        .ai-answer table { border-collapse: collapse; margin: 8px 0; width: 100%; }
+        .ai-answer th, .ai-answer td { border: 1px solid var(--ai-border); padding: 4px 8px; font-size: 0.78rem; }
+        @media (max-width: 480px) {
+            .ai-panel { right: 12px; bottom: 78px; width: calc(100vw - 24px); }
+            .ai-float-btn { right: 12px; bottom: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+        <defs>
+            <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 7 9 17 4 12"></polyline></symbol>
+            <symbol id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></symbol>
+            <symbol id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></symbol>
+            <symbol id="icon-chart-bar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></symbol>
+            <symbol id="icon-document" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></symbol>
+            <symbol id="icon-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></symbol>
+            <symbol id="icon-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></symbol>
+            <symbol id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></symbol>
+            <symbol id="icon-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></symbol>
+            <symbol id="icon-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></symbol>
+            <symbol id="icon-arrows-up-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"></path></symbol>
+        </defs>
+    </svg>
+    <div class="lg-overlay" id="lgOverlay"></div>
+    <div class="lg-panel" id="lgPanel">
+        <span class="lg-panel-icon" id="lgIcon"><svg class="icon-svg" aria-hidden="true"><use href="#icon-check"></use></svg></span>
+        <div class="lg-panel-title" id="lgTitle" data-i18n="dlg_title">提示</div>
+        <div class="lg-panel-message" id="lgMessage" data-i18n="dlg_message">消息内容</div>
+        <div class="lg-panel-actions" id="lgActions"></div>
+    </div>
+    <div class="theme-controls">
+        <button class="theme-toggle" id="themeToggle" title="切换主题" data-i18n-title="theme_title">
+            <svg class="icon" aria-hidden="true"><use href="#icon-moon"></use></svg>
+            <span class="text" data-i18n="theme_dark">深色</span>
+        </button>
+        <button class="style-toggle" id="styleToggle" title="切换图表风格" data-i18n-title="style_title">
+            <svg class="icon" aria-hidden="true"><use href="#icon-chart-bar"></use></svg>
+            <span class="text" data-i18n="style_standard">标准风格</span>
+        </button>
+        <button class="lang-toggle" id="langToggle" title="切换语言" data-i18n-title="lang_title">
+            <span class="icon-lang" data-i18n="lang_icon">中</span>
+            <span class="text" data-i18n="lang_text">中文</span>
+        </button>
+        <button class="help-btn" id="helpBtn" title="帮助" data-i18n-title="help_title">
+            <svg class="icon" aria-hidden="true"><use href="#icon-info"></use></svg>
+        </button>
+        <span class="visit-counter" id="visitCounter" title="点击切换访问量/访客数" data-i18n-title="visit_title">
+            <span class="visit-label" id="visitLabel" data-i18n="visit_label">访问量：</span>
+            <span class="visit-num" id="visitNum">--</span>
+        </span>
+        <span style="display:none" id="busuanzi_site_pv">--</span>
+        <span style="display:none" id="busuanzi_site_uv">--</span>
+    </div>
+    <div class="help-panel" id="helpPanel">
+        <button class="close-help" id="closeHelp">×</button>
+        <div id="helpContent">
+            <span class="component-filter-empty" data-i18n="loading">加载中...</span>
+        </div>
+    </div>
+    <div class="container">
+        <div class="main-content">
+            <div class="control-panel">
+                <div class="control-section">
+                    <h3 class="section-title" data-i18n="sec_direction">滴定方向</h3>
+                    <div class="toggle-container">
+                        <button class="toggle-btn active" data-type="acid-base" data-i18n="btn_acid_base">酸滴定碱</button>
+                        <button class="toggle-btn" data-type="base-acid" data-i18n="btn_base_acid">碱滴定酸</button>
+                    </div>
+                </div>
+                <div class="control-section">
+                    <h3 class="section-title" data-i18n="sec_solution">待滴定溶液</h3>
+                    <button class="add-component-btn" id="addSolutionComponent" data-i18n="add_component">+ 添加酸/碱组件</button>
+                    <div id="solutionComponents"></div>
+                    <div class="form-group" style="margin-top: 14px;">
+                        <label data-i18n="lbl_total_volume">总体积 (mL)</label>
+                        <input type="number" id="initialVol" value="20" step="1" min="1">
+                    </div>
+                </div>
+                <div class="control-section">
+                    <h3 class="section-title" data-i18n="sec_titrant">滴定剂</h3>
+                    <button class="add-component-btn" id="addTitrantComponent" data-i18n="add_component">+ 添加酸/碱组件</button>
+                    <div id="titrantComponents"></div>
+                </div>
+                <div class="control-section">
+                    <h3 class="section-title" data-i18n="sec_params">计算参数</h3>
+                    <div class="form-group sample-density-group">
+                        <div class="sample-density-row">
+                            <label class="sample-density-title" for="sampleDensitySlider" data-i18n="lbl_sample_density">采样密度</label>
+                            <span class="sample-density-min">200</span>
+                            <div class="sample-density-track">
+                                <input type="range" class="density-slider" id="sampleDensitySlider" min="200" max="2000" step="10" value="500">
+                            </div>
+                            <span class="sample-density-max">2000</span>
+                            <span class="sample-density-value" id="sliderBubble">500</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="lbl_max_volume">最大滴定体积 (mL)</label>
+                        <input type="number" id="maxVolume" value="100" step="10" min="10">
+                        <div class="auto-sample-row" style="margin-top: 10px;">
+                            <label class="control-toggle-item">
+                                <input type="checkbox" id="autoMaxVolumeToggle" checked>
+                                <span class="control-toggle-label" data-i18n="auto_max_volume">按混合液净当量自动设置最大体积（约 1.2×）</span>
+                            </label>
+                        </div>
+                        <div class="distribution-chart-note" id="autoMaxVolumeHint" data-i18n="auto_max_hint">生成曲线时会按各组分浓度 × 元数加和，并用净酸碱当量估算完全滴定点。</div>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="lbl_curve_color">曲线颜色</label>
+                        <input type="color" id="curveColor" value="#57a7bd">
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="lbl_curve_name">曲线名称</label>
+                        <input type="text" id="curveName" value="滴定曲线1" placeholder="为当前曲线命名" data-i18n-placeholder="curve_name_placeholder">
+                    </div>
+                </div>
+                <div class="saved-curves-section">
+                    <h3 class="section-title" data-i18n="sec_saved_curves">保存曲线列表</h3>
+                    <button class="btn" id="saveCurrentCurve" data-i18n="btn_save_curve">保存当前曲线</button>
+                    <div class="saved-curves-list" id="savedCurvesList"></div>
+                </div>
+                <button class="generate-btn" id="generateBtn">
+                    <div class="loader"></div>
+                    <span class="btn-text" data-i18n="generate_curve">生成滴定曲线</span>
+                </button>
+                <div class="auto-sample-row">
+                    <label class="control-toggle-item">
+                        <input type="checkbox" id="autoSampleToggle" checked>
+                        <span class="control-toggle-label" data-i18n="auto_sample">突变区域自动插值</span>
+                    </label>
+                </div>
+            </div>
+            <div class="desktop-workspace-switch" id="desktopWorkspaceSwitch" aria-label="桌面端图表功能切换" data-i18n-aria-label="ws_switch_label">
+                <button type="button" class="desktop-workspace-btn active" data-desktop-view="charts" data-i18n="ws_charts">单/多曲线</button>
+                <button type="button" class="desktop-workspace-btn" data-desktop-view="distribution" data-i18n="ws_distribution">浓度分布</button>
+                <button type="button" class="desktop-workspace-btn" data-desktop-view="composite" data-i18n="ws_composite">复合对比</button>
+            </div>
+            <div class="charts-area">
+                <div class="tabs-bar">
+                    <div class="tabs-list" id="chartTabs">
+                        <div class="tab-add-wrapper" id="tabAddWrapper">
+                            <button class="action-btn tab-add-btn" id="addChartTabBtn">+</button>
+                        <div class="tab-add-menu" id="addChartTabMenu">
+                            <button class="tab-menu-item" data-type="single" data-i18n="tab_single">单曲线标签</button>
+                            <button class="tab-menu-item" data-type="multi" data-i18n="tab_multi">多曲线标签</button>
+                        </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="tabs-content" id="chartTabContents"></div>
+            </div>
+            <div class="distribution-area" id="distributionArea">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div>
+                            <div class="chart-title" data-i18n="dist_title">物种分布</div>
+                            <div class="distribution-chart-note" data-i18n="dist_note">横轴可按滴定体积或 pH 显示，可按浓度、log/−log 或总物质的量查看各组分分布。点击图表查看具体数值。</div>
+                        </div>
+                        <div class="chart-actions">
+                            <div class="dist-mode-switch" id="distModeSwitch" role="tablist" aria-label="纵轴模式" data-i18n-aria-label="dist_x_axis_label">
+                                <button type="button" class="dist-mode-btn active" data-mode="linear" role="tab" aria-selected="true" data-i18n="dist_mode_linear">浓度</button>
+                                <button type="button" class="dist-mode-btn" data-mode="log" role="tab" aria-selected="false" data-i18n="dist_mode_log">−log c</button>
+                                <button type="button" class="dist-mode-btn" data-mode="amount" role="tab" aria-selected="false" data-i18n="dist_mode_amount">总量</button>
+                                <button type="button" class="dist-mode-btn" data-mode="amountLog" role="tab" aria-selected="false" data-i18n="dist_mode_amount_log">−log 总量</button>
+                            </div>
+                            <div class="dist-mode-switch dist-axis-switch" id="distXAxisSwitch" role="tablist" aria-label="横轴模式" data-i18n-aria-label="dist_x_axis_label" title="切换横轴：体积 / pH / pOH" data-i18n-title="dist_x_axis_title">
+                                <button type="button" class="dist-mode-btn active" data-xmode="volume" role="tab" aria-selected="true">V</button>
+                                <button type="button" class="dist-mode-btn" data-xmode="ph" role="tab" aria-selected="false">pH</button>
+                                <button type="button" class="dist-mode-btn" data-xmode="poh" role="tab" aria-selected="false">pOH</button>
+                            </div>
+                            <div class="dist-mode-switch dist-log-sign-switch" id="distLogSignSwitch" role="tablist" aria-label="log 正负号" data-i18n-aria-label="dist_log_sign_label" title="log 模式下切换 log / −log" data-i18n-title="dist_log_sign_title">
+                                <button type="button" class="dist-mode-btn" data-logsign="pos" role="tab" aria-selected="false">log</button>
+                                <button type="button" class="dist-mode-btn active" data-logsign="neg" role="tab" aria-selected="true">−log</button>
+                            </div>
+                            <select class="action-btn" id="distImageFormat" aria-label="图片格式" data-i18n-aria-label="img_format_label">
+                                <option value="png">PNG</option>
+                                <option value="jpg">JPG</option>
+                            </select>
+                            <select class="action-btn" id="distImageScale" aria-label="导出倍率" data-i18n-aria-label="img_scale_label">
+                                <option value="1">1×</option>
+                                <option value="2" selected>2×</option>
+                                <option value="3">3×</option>
+                                <option value="4">4×</option>
+                            </select>
+                            <button type="button" class="action-btn" id="distDownloadBtn" data-i18n="download_chart">下载图表</button>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="distributionChart"></canvas>
+                    </div>
+                    <div class="chart-utility-row chart-aspect-row distribution-aspect-row" id="distributionAspectRow">
+                        <div class="control-toggle-item">
+                            <span class="chart-width-label" data-i18n="chart_width">图表宽度</span>
+                            <input type="number" class="chart-width-input" id="distChartWidth" placeholder="自动" min="200" max="4000" step="10" data-i18n-placeholder="placeholder_auto">
+                        </div>
+                        <select class="action-btn" id="distChartAspect" aria-label="分布图横宽比" data-i18n-aria-label="aspect_label">
+                            <option value="auto" data-i18n="aspect_auto">比例自动</option>
+                            <option value="16:9">16:9</option>
+                            <option value="4:3">4:3</option>
+                            <option value="1:1">1:1</option>
+                            <option value="3:2">3:2</option>
+                            <option value="2:1">2:1</option>
+                        </select>
+                        <label class="control-toggle-item">
+                            <input type="checkbox" id="distGridEnabled" checked>
+                            <span class="control-toggle-label" data-i18n="grid_label">网格</span>
+                        </label>
+                        <label class="control-toggle-item">
+                            <input type="checkbox" id="distLegendEnabled" checked>
+                            <span class="control-toggle-label" data-i18n="legend_label">图例</span>
+                        </label>
+                        <input type="number" class="chart-width-input compact-number-input" id="distGridXStep" placeholder="横向间距 自动" min="0" step="0.1" data-i18n-placeholder="grid_x_step_placeholder">
+                        <input type="number" class="chart-width-input compact-number-input" id="distGridYStep" placeholder="纵向间距 自动" min="0" step="0.1" data-i18n-placeholder="grid_y_step_placeholder">
+                    </div>
+                    <details class="chart-appearance-panel dist-axis-panel">
+                        <summary class="chart-appearance-summary" data-i18n="axis_style_summary">坐标轴样式设置</summary>
+                        <div class="chart-utility-row axis-labels-row">
+                            <span class="axis-field-group"><span data-i18n="axis_x_label">X轴标签</span> <input type="text" id="distXAxisLabel" placeholder="留空默认" data-i18n-placeholder="placeholder_auto"></span>
+                            <span class="axis-field-group"><span data-i18n="axis_y_label">Y轴标签</span> <input type="text" id="distYAxisLabel" placeholder="留空默认" data-i18n-placeholder="placeholder_auto"></span>
+                            <span class="axis-field-group"><span data-i18n="axis_x_line_color">X轴线颜色</span> <input type="color" id="distXAxisLineColor" value="#666666"></span>
+                            <span class="axis-field-group"><span data-i18n="axis_y_line_color">Y轴线颜色</span> <input type="color" id="distYAxisLineColor" value="#666666"></span>
+                            <span class="axis-field-group"><span data-i18n="axis_x_tick_color">X刻度颜色</span> <input type="color" id="distXTickColor" value="#666666"></span>
+                            <span class="axis-field-group"><span data-i18n="axis_y_tick_color">Y刻度颜色</span> <input type="color" id="distYTickColor" value="#666666"></span>
+                            <span class="axis-field-group"><span data-i18n="axis_x_grid_color">X网格颜色</span> <input type="color" id="distXGridColor" value="#e5e5e5"></span>
+                            <span class="axis-field-group"><span data-i18n="axis_y_grid_color">Y网格颜色</span> <input type="color" id="distYGridColor" value="#e5e5e5"></span>
+                            <label><input type="checkbox" id="distXTicksVisible" checked><span data-i18n="ticks_x">X刻度</span></label>
+                            <label><input type="checkbox" id="distYTicksVisible" checked><span data-i18n="ticks_y">Y刻度</span></label>
+                            <label><input type="checkbox" id="distXAxisArrow"><span data-i18n="arrow_x">X箭头</span></label>
+                            <label><input type="checkbox" id="distYAxisArrow"><span data-i18n="arrow_y">Y箭头</span></label>
+                        </div>
+                    </details>
+                    <details class="chart-appearance-panel dist-advanced-panel">
+                        <summary class="chart-appearance-summary" data-i18n="advanced_summary">高级设置</summary>
+                        <div class="distribution-control-panel">
+                            <div class="distribution-control-card">
+                                <div class="distribution-control-title">
+                                    <span id="distXRangeTitle" data-i18n="x_range_title">X 轴范围</span>
+                                    <button type="button" class="dist-mini-btn" id="distXAutoBtn" data-i18n="btn_auto">自动</button>
+                                </div>
+                                <div class="ph-range-row">
+                                    <input type="number" class="volume-pick-input ph-range-input" id="distXMin" step="0.01" aria-label="X轴下限" data-i18n-aria-label="x_min_aria">
+                                    <span class="ph-range-separator" data-i18n="range_separator">到</span>
+                                    <input type="number" class="volume-pick-input ph-range-input" id="distXMax" step="0.01" aria-label="X轴上限" data-i18n-aria-label="x_max_aria">
+                                </div>
+                                <div class="ph-range-note" id="distXRangeNote" data-i18n="x_range_note">留空则自动根据数据范围计算</div>
+                            </div>
+                            <div class="distribution-control-card">
+                                <div class="distribution-control-title">
+                                    <span data-i18n="y_range_title">Y轴范围</span>
+                                    <button type="button" class="dist-mini-btn" id="distYAutoBtn" data-i18n="btn_auto">自动</button>
+                                </div>
+                                <div class="ph-range-row">
+                                    <input type="number" class="volume-pick-input ph-range-input" id="distYMin" step="any" aria-label="Y轴下限" data-i18n-aria-label="y_min_aria">
+                                    <span class="ph-range-separator" data-i18n="range_separator">到</span>
+                                    <input type="number" class="volume-pick-input ph-range-input" id="distYMax" step="any" aria-label="Y轴上限" data-i18n-aria-label="y_max_aria">
+                                </div>
+                                <div class="ph-range-note" data-i18n="y_range_note">留空则自动根据数据范围计算。</div>
+                            </div>
+                            <div class="distribution-control-card">
+                                <div class="distribution-control-title">
+                                    <span data-i18n="show_components">显示组分</span>
+                                    <span>
+                                        <button type="button" class="dist-mini-btn" id="distComponentAllBtn" data-i18n="select_all">全选</button>
+                                        <button type="button" class="dist-mini-btn" id="distComponentNoneBtn" data-i18n="select_none">清空</button>
+                                    </span>
+                                </div>
+                                <div class="component-filter-list" id="distributionComponentList">
+                                    <span class="component-filter-empty" data-i18n="no_components">生成曲线后可选择要显示的组分。</span>
+                                </div>
+                            </div>
+                            <div class="distribution-control-card">
+                                <div class="distribution-control-title">
+                                    <span data-i18n="curve_style">曲线样式</span>
+                                </div>
+                                <div class="component-filter-list curve-style-settings-list" id="distributionStyleList">
+                                    <span class="component-filter-empty" data-i18n="no_curve_style">生成曲线后可设置每条分布曲线。</span>
+                                </div>
+                            </div>
+                            <div class="distribution-control-card">
+                                <div class="distribution-control-title">
+                                    <span data-i18n="custom_curve">自定义组合曲线</span>
+                                    <button type="button" class="dist-mini-btn" id="distExprClearBtn" data-i18n="clear">清空</button>
+                                </div>
+                                <input type="text" class="volume-pick-input dist-expression-name" id="distExpressionName" placeholder="曲线名称，例如：酸碱差" data-i18n-placeholder="custom_curve_name_placeholder">
+                                <div class="dist-expression-display" id="distExpressionDisplay" aria-label="自定义曲线表达式" data-i18n-aria-label="custom_expr_label"></div>
+                                <div class="dist-expression-toolbar" id="distExpressionOps">
+                                    <button type="button" class="dist-mini-btn" data-token="+">+</button>
+                                    <button type="button" class="dist-mini-btn" data-token="-">−</button>
+                                    <button type="button" class="dist-mini-btn" data-token="*">×</button>
+                                    <button type="button" class="dist-mini-btn" data-token="/">÷</button>
+                                    <button type="button" class="dist-mini-btn" data-token="(">(</button>
+                                    <button type="button" class="dist-mini-btn" data-token=")">)</button>
+                                    <button type="button" class="dist-mini-btn" data-token="^">^</button>
+                                    <button type="button" class="dist-mini-btn dist-back-btn" id="distExprBackBtn" title="退格" data-i18n-title="backspace_title">⌫</button>
+                                </div>
+                                <div class="dist-expression-num-row" id="distExpressionNums">
+                                    <button type="button" class="dist-mini-btn dist-num-btn" data-token="0">0</button>
+                                    <button type="button" class="dist-mini-btn dist-num-btn" data-token="1">1</button>
+                                    <button type="button" class="dist-mini-btn dist-num-btn" data-token="2">2</button>
+                                    <button type="button" class="dist-mini-btn dist-num-btn" data-token="3">3</button>
+                                    <button type="button" class="dist-mini-btn dist-num-btn" data-token="4">4</button>
+                                    <button type="button" class="dist-mini-btn dist-num-btn" data-token="5">5</button>
+                                    <button type="button" class="dist-mini-btn dist-num-btn" data-token="6">6</button>
+                                    <button type="button" class="dist-mini-btn dist-num-btn" data-token="7">7</button>
+                                    <button type="button" class="dist-mini-btn dist-num-btn" data-token="8">8</button>
+                                    <button type="button" class="dist-mini-btn dist-num-btn" data-token="9">9</button>
+                                    <button type="button" class="dist-mini-btn dist-num-btn" data-token=".">.</button>
+                                </div>
+                                <div class="component-filter-list dist-expression-token-list" id="distExpressionTokens">
+                                    <span class="component-filter-empty" data-i18n="no_expr_tokens">生成曲线后可点击组分标签构建表达式。</span>
+                                </div>
+                                <button type="button" class="dist-mini-btn" id="distExpressionAddBtn" data-i18n="add_curve">添加为曲线</button>
+                                <div class="ph-range-note" data-i18n="expr_help">表达式支持组分标签、H⁺、OH⁻ 以及 + − × ÷ 和括号；添加后会作为普通分布曲线参与显示、取点和样式编辑。</div>
+                            </div>
+                            <div class="distribution-control-card">
+                                <div class="distribution-control-title">
+                                    <span data-i18n="dist_pick_title">分布图取点</span>
+                                </div>
+                                <div class="dist-pick-row dist-pick-target-row">
+                                    <span class="dist-pick-label" data-i18n="mark_curve_label">标点曲线</span>
+                                    <div class="dist-mark-target-list" id="distMarkSpeciesSelect" aria-label="选择要标点的分布曲线" data-i18n-aria-label="mark_curve_aria"></div>
+                                </div>
+                                <div class="chart-utility-row" style="gap:6px;flex-wrap:wrap;">
+                                    <div class="dist-pick-row" style="margin-top:0;">
+                                        <input type="number" class="volume-pick-input dist-pick-input" id="distVolumePickInput" placeholder="体积 (mL)" step="0.01" aria-label="按体积取点" data-i18n-placeholder="volume_placeholder" data-i18n-aria-label="pick_by_volume">
+                                        <button type="button" class="dist-mini-btn" id="distVolumePickBtn" data-i18n="pick_by_volume">按体积</button>
+                                    </div>
+                                    <div class="dist-pick-row" style="margin-top:0;">
+                                        <input type="number" class="volume-pick-input dist-pick-input" id="distPHPickInput" placeholder="pH" step="0.01" aria-label="按 pH 取点" data-i18n-placeholder="ph_placeholder" data-i18n-aria-label="pick_by_ph">
+                                        <button type="button" class="dist-mini-btn" id="distPHPickBtn" data-i18n="pick_by_ph">按 pH</button>
+                                    </div>
+                                </div>
+                                <div class="dist-pick-row dist-clear-row">
+                                    <button type="button" class="action-btn dist-clear-marks-btn" id="distClearMarksBtn" data-i18n="clear_all_marks">清除所有取点</button>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                    <details class="chart-appearance-panel save-composite-panel" id="distSaveToCompositePanel">
+                        <summary class="chart-appearance-summary" data-i18n="save_to_composite_summary">保存到复合对比</summary>
+                        <div class="save-composite-content">
+                            <div class="save-composite-list" id="distSaveToCompositeList">
+                                <span class="component-filter-empty" data-i18n="no_curves_to_save">生成曲线后可选择要保存的曲线。</span>
+                            </div>
+                            <button type="button" class="action-btn save-composite-inline-btn" id="distSaveToCompositeBtn">
+                                <svg class="icon" aria-hidden="true"><use href="#icon-chart-bar"></use></svg>
+                                <span data-i18n="save_selected_to_composite">保存选中曲线到复合对比</span>
+                            </button>
+                        </div>
+                    </details>
+                    <details class="marks-info-panel" id="distMarksPanel">
+                        <summary data-i18n="selected_info">选定信息 <span class="marks-count">(0)</span></summary>
+                        <div class="marks-list" id="distMarksList"></div>
+                    </details>
+                    <details class="intersection-panel" id="distIntersectionPanel">
+                        <summary data-i18n="intersection_title">交点查找</summary>
+                        <div class="intersection-form" id="distIntersectionForm">
+                            <select id="distIntCurve1"></select>
+                            <span style="color:var(--text-secondary);font-size:0.8rem;">&</span>
+                            <select id="distIntCurve2"></select>
+                            <button class="intersection-btn" id="distIntBtn" data-i18n="solve_intersection">求解交点</button>
+                        </div>
+                    </details>
+                    <div class="point-info active" id="distributionEmpty">
+                        <div class="point-info-title" data-i18n="no_dist_data_title">暂无分布数据</div>
+                        <div class="distribution-chart-note" data-i18n="no_dist_data_note">请先在设置页生成滴定曲线。</div>
+                    </div>
+                </div>
+            </div>
+            <div class="composite-area" id="compositeArea">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div>
+                            <div class="chart-title" data-i18n="composite_title">复合对比</div>
+                            <div class="distribution-chart-note" data-i18n="composite_note">将单/多曲线或浓度分布中的曲线放在同一坐标系对比。最多支持左右两组纵轴。</div>
+                        </div>
+                        <div class="chart-actions">
+                            <select class="action-btn" id="compositeImageFormat" aria-label="图片格式" data-i18n-aria-label="img_format_label">
+                                <option value="png">PNG</option>
+                                <option value="jpg">JPG</option>
+                            </select>
+                            <select class="action-btn" id="compositeImageScale" aria-label="导出倍率" data-i18n-aria-label="img_scale_label">
+                                <option value="1">1×</option>
+                                <option value="2" selected>2×</option>
+                                <option value="3">3×</option>
+                                <option value="4">4×</option>
+                            </select>
+                            <button type="button" class="action-btn" id="compositeDownloadBtn" data-i18n="download_chart">下载图表</button>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="compositeChart"></canvas>
+                    </div>
+                    <div class="chart-utility-row chart-aspect-row distribution-aspect-row" id="compositeAspectRow">
+                        <div class="control-toggle-item">
+                            <span class="chart-width-label" data-i18n="chart_width">图表宽度</span>
+                            <input type="number" class="chart-width-input" id="compositeChartWidth" placeholder="自动" min="200" max="4000" step="10" data-i18n-placeholder="placeholder_auto">
+                        </div>
+                        <select class="action-btn" id="compositeChartAspect" aria-label="复合图横宽比" data-i18n-aria-label="composite_aspect_label">
+                            <option value="auto" data-i18n="aspect_auto">比例自动</option>
+                            <option value="16:9">16:9</option>
+                            <option value="4:3">4:3</option>
+                            <option value="1:1">1:1</option>
+                            <option value="3:2">3:2</option>
+                            <option value="2:1">2:1</option>
+                        </select>
+                        <label class="control-toggle-item">
+                            <input type="checkbox" id="compositeGridEnabled" checked>
+                            <span class="control-toggle-label" data-i18n="grid_label">网格</span>
+                        </label>
+                        <label class="control-toggle-item">
+                            <input type="checkbox" id="compositeLegendEnabled" checked>
+                            <span class="control-toggle-label" data-i18n="legend_label">图例</span>
+                        </label>
+                        <input type="number" class="chart-width-input compact-number-input" id="compositeGridXStep" placeholder="横向间距 自动" min="0" step="0.1" data-i18n-placeholder="grid_x_step_placeholder">
+                        <input type="number" class="chart-width-input compact-number-input" id="compositeGridYStep" placeholder="纵向间距 自动" min="0" step="0.1" data-i18n-placeholder="grid_y_step_placeholder">
+                    </div>
+                    <details class="chart-appearance-panel composite-marks-panel" id="compositeMarksControlPanel">
+                        <summary class="chart-appearance-summary" data-i18n="marks_summary">标点</summary>
+                        <div class="distribution-control-panel">
+                            <div class="distribution-control-card">
+                                <div class="distribution-control-title">
+                                    <span data-i18n="mark_curve_label">标点曲线</span>
+                                </div>
+                                <div class="component-filter-list" id="compositeMarkTargetList">
+                                    <span class="component-filter-empty" data-i18n="no_marks">暂无曲线。</span>
+                                </div>
+                                <div class="ph-range-note" data-i18n="marks_y_note">按Y取点时只在所选曲线中搜索；建议所选曲线纵轴单位相同。</div>
+                            </div>
+                            <div class="distribution-control-card">
+                                <div class="distribution-control-title">
+                                    <span data-i18n="pick_by_coordinates">按坐标取点</span>
+                                </div>
+                                <div class="chart-utility-row" style="gap:6px;flex-wrap:wrap;">
+                                    <div class="volume-pick-group">
+                                        <input type="number" class="volume-pick-input" id="compositeXPickInput" placeholder="体积 (mL)" step="0.01" aria-label="按横坐标取点" data-i18n-placeholder="volume_placeholder" data-i18n-aria-label="pick_by_x">
+                                        <button type="button" class="action-btn" id="compositeXPickBtn" data-i18n="pick_by_x">按X取点</button>
+                                    </div>
+                                    <div class="volume-pick-group">
+                                        <input type="number" class="volume-pick-input" id="compositeYPickInput" placeholder="pH / 浓度..." step="0.01" aria-label="按纵坐标取点" data-i18n-placeholder="y_placeholder" data-i18n-aria-label="pick_by_y">
+                                        <button type="button" class="action-btn" id="compositeYPickBtn" data-i18n="pick_by_y">按Y取点</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="distribution-control-card">
+                                <button type="button" class="action-btn mark-clear-btn" id="compositeClearMarksBtn" data-i18n="clear_marks">清除标点</button>
+                            </div>
+                        </div>
+                    </details>
+                    <details class="chart-appearance-panel dist-advanced-panel" id="compositeAdvancedPanel">
+                        <summary class="chart-appearance-summary" data-i18n="composite_settings_summary">曲线、外观与坐标轴设置</summary>
+                        <div class="distribution-control-panel">
+                            <div class="distribution-control-card">
+                                <div class="distribution-control-title">
+                                    <span data-i18n="show_curves">显示曲线</span>
+                                    <span>
+                                        <button type="button" class="dist-mini-btn" id="compositeSelectAllBtn" data-i18n="select_all">全选</button>
+                                        <button type="button" class="dist-mini-btn" id="compositeSelectNoneBtn" data-i18n="select_none">清空</button>
+                                    </span>
+                                </div>
+                                <div class="component-filter-list" id="compositeCurveList">
+                                    <span class="component-filter-empty" data-i18n="no_composite_empty">暂无复合对比曲线。</span>
+                                </div>
+                            </div>
+                            <div class="distribution-control-card">
+                                <div class="distribution-control-title">
+                                    <span data-i18n="chart_appearance">图表外观</span>
+                                </div>
+                                <div class="chart-utility-row axis-labels-row">
+                                    <span class="axis-field-group"><span data-i18n="axis_x_label">X轴标签</span> <input type="text" id="compositeXAxisLabel" placeholder="留空默认" data-i18n-placeholder="placeholder_auto"></span>
+                                    <span class="axis-field-group"><span data-i18n="left_y_label">左Y轴标签</span> <input type="text" id="compositeYAxisLabel" placeholder="留空默认" data-i18n-placeholder="placeholder_auto"></span>
+                                    <span class="axis-field-group"><span data-i18n="right_y_label">右Y轴标签</span> <input type="text" id="compositeY2AxisLabel" placeholder="留空默认" data-i18n-placeholder="placeholder_auto"></span>
+                                    <span class="axis-field-group"><span data-i18n="axis_x_line_color">X轴线颜色</span> <input type="color" id="compositeXAxisLineColor" value="#666666"></span>
+                                    <span class="axis-field-group"><span data-i18n="axis_y_line_color">Y轴线颜色</span> <input type="color" id="compositeYAxisLineColor" value="#666666"></span>
+                                    <span class="axis-field-group"><span data-i18n="axis_x_tick_color">X刻度颜色</span> <input type="color" id="compositeXTickColor" value="#666666"></span>
+                                    <span class="axis-field-group"><span data-i18n="axis_y_tick_color">Y刻度颜色</span> <input type="color" id="compositeYTickColor" value="#666666"></span>
+                                    <span class="axis-field-group"><span data-i18n="axis_x_grid_color">X网格颜色</span> <input type="color" id="compositeXGridColor" value="#e5e5e5"></span>
+                                    <span class="axis-field-group"><span data-i18n="axis_y_grid_color">Y网格颜色</span> <input type="color" id="compositeYGridColor" value="#e5e5e5"></span>
+                                    <label><input type="checkbox" id="compositeXTicksVisible" checked><span data-i18n="ticks_x">X刻度</span></label>
+                                    <label><input type="checkbox" id="compositeYTicksVisible" checked><span data-i18n="ticks_y">Y刻度</span></label>
+                                    <label><input type="checkbox" id="compositeXAxisArrow"><span data-i18n="arrow_x">X箭头</span></label>
+                                    <label><input type="checkbox" id="compositeYAxisArrow"><span data-i18n="arrow_y">Y箭头</span></label>
+                                </div>
+                            </div>
+                            <div class="distribution-control-card">
+                                <div class="distribution-control-title">
+                                    <span data-i18n="curve_style">曲线样式</span>
+                                </div>
+                                <div class="component-filter-list curve-style-settings-list" id="compositeStyleList">
+                                    <span class="component-filter-empty" data-i18n="no_style_yet">添加曲线后可设置样式。</span>
+                                </div>
+                            </div>
+                            <div class="distribution-control-card">
+                                <div class="distribution-control-title">
+                                    <span data-i18n="axis_range">坐标轴范围</span>
+                                    <button type="button" class="dist-mini-btn" id="compositeAxisAutoBtn" data-i18n="btn_auto">自动</button>
+                                </div>
+                                <div class="ph-range-row">
+                                    <span class="ph-range-label" data-i18n="x_range_label">横轴范围</span>
+                                    <input type="number" class="volume-pick-input ph-range-input" id="compositeXMin" placeholder="最小" step="any" aria-label="X轴下限" data-i18n-placeholder="x_min_placeholder" data-i18n-aria-label="x_min_aria">
+                                    <span class="ph-range-separator" data-i18n="range_separator">到</span>
+                                    <input type="number" class="volume-pick-input ph-range-input" id="compositeXMax" placeholder="最大" step="any" aria-label="X轴上限" data-i18n-placeholder="x_max_placeholder" data-i18n-aria-label="x_max_aria">
+                                </div>
+                                <div class="ph-range-row">
+                                    <span class="ph-range-label" data-i18n="left_y_range">左侧纵轴范围</span>
+                                    <input type="number" class="volume-pick-input ph-range-input" id="compositeYLeftMin" placeholder="最小" step="any" aria-label="左侧Y轴下限" data-i18n-placeholder="x_min_placeholder" data-i18n-aria-label="y_min_aria">
+                                    <span class="ph-range-separator" data-i18n="range_separator">到</span>
+                                    <input type="number" class="volume-pick-input ph-range-input" id="compositeYLeftMax" placeholder="最大" step="any" aria-label="左侧Y轴上限" data-i18n-placeholder="x_max_placeholder" data-i18n-aria-label="y_max_aria">
+                                </div>
+                                <div class="ph-range-row">
+                                    <span class="ph-range-label" data-i18n="right_y_range">右侧纵轴范围</span>
+                                    <input type="number" class="volume-pick-input ph-range-input" id="compositeYRightMin" placeholder="最小" step="any" aria-label="右侧Y轴下限" data-i18n-placeholder="x_min_placeholder" data-i18n-aria-label="y_min_aria">
+                                    <span class="ph-range-separator" data-i18n="range_separator">到</span>
+                                    <input type="number" class="volume-pick-input ph-range-input" id="compositeYRightMax" placeholder="最大" step="any" aria-label="右侧Y轴上限" data-i18n-placeholder="x_max_placeholder" data-i18n-aria-label="y_max_aria">
+                                </div>
+                                <div class="ph-range-note" data-i18n="axis_range_note">留空则自动根据可见数据范围计算。</div>
+                            </div>
+                        </div>
+                    </details>
+                    <details class="marks-info-panel" id="compositeMarksPanel">
+                        <summary data-i18n="selected_info">选定信息 <span class="marks-count">(0)</span></summary>
+                        <div class="marks-list" id="compositeMarksList"></div>
+                    </details>
+                    <div class="point-info active" id="compositeEmpty">
+                        <div class="point-info-title" data-i18n="no_composite_data_title">暂无复合数据</div>
+                        <div class="distribution-chart-note" data-i18n="no_composite_data_note">请先在单曲线/多曲线或浓度分布界面点击「保存到复合对比」。</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal" id="presetModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" data-i18n="preset_title">选择预置酸碱</h3>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="add-preset-mode">
+                    <span class="mode-option active" data-mode="solution" data-i18n="preset_mode_solution">添加到待滴定溶液</span>
+                    <span class="mode-option" data-mode="titrant" data-i18n="preset_mode_titrant">添加到滴定剂</span>
+                </div>
+                <div class="preset-selector">
+                    <button class="preset-type-btn active" data-type="all" data-i18n="filter_all">全部</button>
+                    <button class="preset-type-btn" data-type="acid" data-i18n="filter_acid">酸</button>
+                    <button class="preset-type-btn" data-type="base" data-i18n="filter_base">碱</button>
+                </div>
+                <div class="search-box">
+                    <input type="text" class="search-input" id="presetSearch" placeholder="搜索酸碱名称或化学式..." data-i18n-placeholder="preset_search_placeholder">
+                </div>
+                <div class="preset-list" id="presetList"></div>
+            </div>
+        </div>
+    </div>
+    <div id="holdProgress" class="hold-progress"></div>
+    <div id="hoverPreview" class="hover-preview"></div>
+    <div class="app-page-nav" id="appPageNav" aria-label="Page navigation">
+        <div class="app-page-menu" id="appPageMenu">
+            <button type="button" class="app-page-action active" data-app-page="0" data-i18n="nav_settings">设置</button>
+            <button type="button" class="app-page-action" data-app-page="1" data-i18n="nav_charts">图表</button>
+            <button type="button" class="app-page-action" data-app-page="2" data-i18n="nav_distribution">分布</button>
+            <button type="button" class="app-page-action" data-app-page="3" data-i18n="nav_composite">复合</button>
+        </div>
+        <button type="button" class="app-page-fab" id="appPageFab" aria-label="打开页面菜单" data-i18n-aria-label="page_menu_aria">
+            <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
+        </button>
+        <div class="app-page-dots" aria-hidden="true">
+            <span class="app-page-dot active"></span>
+            <span class="app-page-dot"></span>
+            <span class="app-page-dot"></span>
+            <span class="app-page-dot"></span>
+        </div>
+    </div>
+    <script src="assets/js/plugins/chart-axis-arrow.js"></script>
+    <script src="assets/js/utils/visit-counter.js"></script>
+    <script src="assets/js/data/acid-base-data.js"></script>
+    <script src="assets/js/modules/core.js"></script>
+    <script src="assets/js/modules/calculation.js"></script>
+    <script src="assets/js/modules/components.js"></script>
+    <script src="assets/js/modules/chart-core.js"></script>
+    <script src="assets/js/modules/chart-tabs.js?v=2"></script>
+    <script src="assets/js/modules/chart-render.js"></script>
+    <script src="assets/js/modules/annotations.js"></script>
+    <script src="assets/js/modules/curve-store.js"></script>
+    <script src="assets/js/modules/export.js"></script>
+    <script src="assets/js/modules/presets.js"></script>
+    <script src="assets/js/modules/app.js?v=3"></script>
+    <script src="assets/js/modules/distribution.js?v=3"></script>
+    <script src="assets/js/modules/composite.js"></script>
+    <script src="assets/js/modules/color-picker.js"></script>
+    <button class="ai-float-btn" id="aiFloatBtn" title="AI 助手">AI</button>
+    <div class="ai-panel" id="aiPanel">
+        <div class="ai-panel-header" id="aiPanelHeader">
+            <span class="ai-panel-title">AI 助手</span>
+            <div class="ai-header-actions">
+                <select id="aiModelSelect" class="ai-model-select" title="切换模型">
+                    <option value="doubao-seed-2-1-turbo-260628">Turbo</option>
+                    <option value="doubao-seed-2-0-mini-260428">Mini</option>
+                    <option value="doubao-seed-2-1-pro-260915">Pro</option>
+                    <option value="deepseek-v4-flash-ga-260731">DeepSeek</option>
+                </select>
+                <button class="ai-panel-close" id="aiPanelClose" title="收起">×</button>
+            </div>
+        </div>
+        <div class="ai-panel-body">
+            <div class="ai-tabs">
+                <button class="ai-tab active" data-ai-tab="config">智能配置</button>
+                <button class="ai-tab" data-ai-tab="annotate">标注样式</button>
+                <button class="ai-tab" data-ai-tab="explain">滴定问答</button>
+            </div>
+            <div class="ai-tab-content active" data-ai-content="config">
+                <textarea id="aiConfigInput" class="ai-config-textarea" placeholder="例如：用 0.1000 mol/L NaOH 滴定 20.00 mL 0.1000 mol/L 乙酸，或描述一个混合酸滴定"></textarea>
+                <button class="ai-config-btn" id="aiConfigBtn">生成配置并绘制曲线</button>
+                <div class="ai-status ai-status-info" id="aiConfigStatus">输入题目后点击按钮，AI 会自动填写参数并生成滴定曲线。</div>
+                <div class="ai-history-title">
+                    <span>历史任务</span>
+                    <button class="ai-history-clear" id="aiHistoryClear">清空</button>
+                </div>
+                <div class="ai-history-list" id="aiHistoryList">
+                    <div class="ai-history-empty">暂无历史任务</div>
+                </div>
+            </div>
+            <div class="ai-tab-content" data-ai-content="annotate">
+                <textarea id="aiAnnotateInput" class="ai-config-textarea" placeholder="例如：标出曲线上 pH=7 的中性点，并标出跃迁区间"></textarea>
+                <button class="ai-config-btn" id="aiAnnotateBtn">执行标注</button>
+                <div class="ai-status ai-status-info" id="aiAnnotateStatus">输入标注要求后点击按钮，AI 会自动在图上标记。</div>
+                <div class="ai-history-title"><span>支持指令</span></div>
+                <div class="ai-help-text">标出 pH=7 的点；标出起点/终点/等当点；标出跃迁区间；把曲线改成红色、虚线、方形点等。</div>
+            </div>
+            <div class="ai-tab-content" data-ai-content="explain">
+                <textarea id="aiExplainInput" class="ai-config-textarea" placeholder="例如：当 pH=5 时所有阳离子的浓度是多少？"></textarea>
+                <button class="ai-config-btn" id="aiExplainBtn">获取解答</button>
+                <div class="ai-status ai-status-info" id="aiExplainStatus">输入问题后点击按钮，AI 会结合浓度分布与跃迁数据解答。</div>
+                <div class="ai-history-title"><span>解答</span></div>
+                <div class="ai-answer" id="aiExplainAnswer">等待提问...</div>
+                <div class="ai-history-title"><span>支持的问题</span></div>
+                <div class="ai-help-text">某 pH/体积下某类离子的浓度或总和；跃迁区间与等当点；某种指示剂是否适合当前滴定；其他滴定通识问题。</div>
+            </div>
+        </div>
+    </div>
+    <script src="vendor/marked.min.js?v=1"></script>
+    <script src="vendor/purify.min.js?v=1"></script>
+    <script src="assets/js/modules/ai-api.js?v=2"></script>
+    <script src="assets/js/modules/ai-config.js?v=10"></script>
+    <script src="assets/js/modules/ai-annotate.js?v=5"></script>
+    <script src="assets/js/modules/ai-explain.js?v=7"></script>
+</body>
+</html>
